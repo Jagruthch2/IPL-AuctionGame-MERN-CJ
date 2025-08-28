@@ -28,7 +28,7 @@ export const SocketProvider = ({ children }) => {
 
   useEffect(() => {
     // Initialize socket connection
-    const newSocket = io('http://localhost:4000', {
+    const newSocket = io('https://ipl-auctiongame-mern-cj.onrender.com/', {
       transports: ['websocket', 'polling'],
       withCredentials: true,
       reconnection: true,

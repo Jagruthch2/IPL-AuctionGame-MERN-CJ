@@ -10,11 +10,28 @@ const tournamentService = require('./services/tournamentService');
 
 const app = express();
 const httpServer = http.createServer(app);
+// Define allowed origins
+const allowedOrigins = [
+  "http://localhost:5173", 
+  "http://localhost:5174", 
+  "https://dazzling-mochi-d70ba6.netlify.app",
+  "https://ipl-auctiongame-mern-cj.onrender.com"
+];
+
+// If there's an environment variable for client URL, add it
+if (process.env.CLIENT_URL) {
+  allowedOrigins.push(process.env.CLIENT_URL);
+}
+
+// Allow all origins in development, or if specified in environment variable
+const corsOrigin = process.env.CORS_ALLOW_ALL === 'true' ? '*' : allowedOrigins;
+
 const io = new Server(httpServer, {
   cors: {
-    origin: ["http://localhost:5173", "http://localhost:5174"], // Vite ports
-    methods: ["GET", "POST"],
-    credentials: true
+    origin: corsOrigin,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization"]
   }
 });
 
@@ -22,11 +39,36 @@ const PORT = process.env.PORT || 4000;
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:5174'], // Vite ports
-  credentials: true
+  origin: corsOrigin,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization"]
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Additional CORS headers for preflight requests
+app.use((req, res, next) => {
+  // Check if the origin is in our allowed list
+  const origin = req.headers.origin;
+  if (corsOrigin === '*' || (origin && allowedOrigins.includes(origin))) {
+    res.header('Access-Control-Allow-Origin', origin);
+  } else {
+    // For localhost or other development environments
+    res.header('Access-Control-Allow-Origin', allowedOrigins[0]);
+  }
+  
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  
+  // Handle preflight OPTIONS request
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
+  next();
+});
 
 // Socket.IO connection handling
 const connectedPlayers = new Map(); // Store connected players
@@ -526,6 +568,14 @@ io.on('connection', (socket) => {
 });
 
 // Routes
+app.options('/api/login', (req, res) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.status(200).end();
+});
+
 app.use('/api', authRoutes);
 
 // Test route
