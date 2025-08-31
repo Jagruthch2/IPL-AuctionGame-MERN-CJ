@@ -62,6 +62,7 @@ const IPLAuctionInterface = ({ roomCode, teams, user, isCreator }) => {
   };
 
   const handleBidPlaced = (data) => {
+    // Store the updated auction state with the lastBidTeam
     setAuctionState(data.auctionState);
     
     // Update team stats to reflect the new bid immediately
@@ -160,19 +161,40 @@ const IPLAuctionInterface = ({ roomCode, teams, user, isCreator }) => {
     // For example, if user enters 20.5 (₹20.5L), it becomes 205 (₹205K in the system)
     const amount = parseFloat(bidAmount) * 10; 
     
-    const userBudget = teamStats.find(t => t.id === userTeam.id)?.budget || 0;
+    const userTeamStats = teamStats.find(t => t.id === userTeam.id);
+    const userBudget = userTeamStats?.budget || 0;
+    const playerCount = userTeamStats?.totalPlayers || 0;
     
-    // Validate against user's budget
-    if (socket && amount > 0 && amount <= userBudget) {
-      socket.emit('auction:bid', { roomCode, amount });
-      setBidAmount('');
+    // Client-side validations
+    if (!socket) {
+      return;
+    } else if (playerCount >= 25) {
+      setError('Cannot bid - your team has reached the maximum player limit (25)');
+    } else if (auctionState.lastBidTeam === userTeam.id) {
+      setError('You just placed a bid - wait for other teams to respond');
+    } else if (amount <= 0) {
+      setError('Please enter a valid bid amount');
     } else if (amount > userBudget) {
       setError('Insufficient budget to place this bid');
+    } else {
+      socket.emit('auction:bid', { roomCode, amount });
+      setBidAmount('');
     }
   };
 
   const passBid = () => {
-    if (socket) {
+    const userTeamStats = teamStats.find(t => t.id === userTeam.id);
+    const playerCount = userTeamStats?.totalPlayers || 0;
+    
+    if (!socket) {
+      return;
+    } else if (playerCount >= 25) {
+      setError('Cannot pass - your team has reached the maximum player limit (25)');
+      setTimeout(() => setError(''), 3000);
+    } else if (auctionState.lastBidTeam === userTeam.id) {
+      setError('You just placed a bid - wait for other teams to respond');
+      setTimeout(() => setError(''), 3000);
+    } else {
       socket.emit('auction:pass', { roomCode });
     }
   };
@@ -476,9 +498,21 @@ const IPLAuctionInterface = ({ roomCode, teams, user, isCreator }) => {
                           disabled={
                             !bidAmount || 
                             parseFloat(bidAmount) < (auctionState.currentBid + currentPlayer.bidIncrement) / 10 ||
-                            (parseFloat(bidAmount) * 10) > (teamStats.find(t => t.id === userTeam.id)?.budget || 0)
+                            (parseFloat(bidAmount) * 10) > (teamStats.find(t => t.id === userTeam.id)?.budget || 0) ||
+                            // Disable if player count reached 25
+                            (teamStats.find(t => t.id === userTeam.id)?.totalPlayers || 0) >= 25 ||
+                            // Disable if team just placed a bid (turn-based bidding)
+                            auctionState.lastBidTeam === userTeam.id
                           }
                           className="px-6 py-2 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 disabled:from-gray-500 disabled:to-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all duration-300"
+                          title={
+                            !bidAmount ? "Enter a bid amount" :
+                            parseFloat(bidAmount) < (auctionState.currentBid + currentPlayer.bidIncrement) / 10 ? "Bid amount too low" :
+                            (parseFloat(bidAmount) * 10) > (teamStats.find(t => t.id === userTeam.id)?.budget || 0) ? "Insufficient budget" :
+                            (teamStats.find(t => t.id === userTeam.id)?.totalPlayers || 0) >= 25 ? "Maximum player limit (25) reached" :
+                            auctionState.lastBidTeam === userTeam.id ? "You just placed a bid - wait for other teams to respond" :
+                            "Place your bid"
+                          }
                         >
                           Bid
                         </button>
@@ -494,7 +528,18 @@ const IPLAuctionInterface = ({ roomCode, teams, user, isCreator }) => {
                       <div className="flex gap-2">
                         <button
                           onClick={passBid}
-                          className="flex-1 px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-bold rounded-lg transition-all duration-300"
+                          disabled={
+                            // Disable pass button if this team just placed the last bid (turn-based bidding)
+                            auctionState.lastBidTeam === userTeam.id ||
+                            // Or if player count reached 25
+                            (teamStats.find(t => t.id === userTeam.id)?.totalPlayers || 0) >= 25
+                          }
+                          className="flex-1 px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 disabled:from-gray-500 disabled:to-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all duration-300"
+                          title={
+                            auctionState.lastBidTeam === userTeam.id ? "You just placed a bid - wait for other teams to respond" :
+                            (teamStats.find(t => t.id === userTeam.id)?.totalPlayers || 0) >= 25 ? "Maximum player limit (25) reached" :
+                            "Skip bidding on this player"
+                          }
                         >
                           Pass
                         </button>
@@ -514,8 +559,35 @@ const IPLAuctionInterface = ({ roomCode, teams, user, isCreator }) => {
                   )}
 
                   {error && (
-                    <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-3 mt-4">
-                      <p className="text-red-400">{error}</p>
+                    <div className={`${
+                      error.includes('Cannot bid') || 
+                      error.includes('Insufficient budget') || 
+                      error.includes('wait for other teams') 
+                        ? 'bg-red-500/20 border border-red-500/50' 
+                        : error.includes('placed bid') || error.includes('sold to')
+                          ? 'bg-green-500/20 border border-green-500/50'
+                          : 'bg-blue-500/20 border border-blue-500/50'
+                      } rounded-lg p-3 mt-4 transition-all duration-300 animate-pulse`}
+                    >
+                      <p className={`${
+                        error.includes('Cannot bid') || 
+                        error.includes('Insufficient budget') ||
+                        error.includes('wait for other teams')
+                          ? 'text-red-400'
+                          : error.includes('placed bid') || error.includes('sold to')
+                            ? 'text-green-400'
+                            : 'text-blue-400'
+                      } flex items-center`}>
+                        {error.includes('Cannot bid') || 
+                         error.includes('Insufficient budget') ||
+                         error.includes('wait for other teams')
+                          ? <span className="mr-2">⚠️</span>
+                          : error.includes('placed bid') || error.includes('sold to')
+                            ? <span className="mr-2">✅</span>
+                            : <span className="mr-2">ℹ️</span>
+                        }
+                        {error}
+                      </p>
                     </div>
                   )}
                 </div>
@@ -609,6 +681,11 @@ const IPLAuctionInterface = ({ roomCode, teams, user, isCreator }) => {
                           Current Bidder
                         </span>
                       )}
+                      {auctionState?.lastBidTeam === team.id && (
+                        <span className="ml-2 text-xs bg-blue-500 px-2 py-0.5 rounded-full">
+                          Last Bid
+                        </span>
+                      )}
                     </h4>
                     {/* Enhanced Budget Display with both remaining and spent budget */}
                     <div className="mt-2 mb-3">
@@ -642,7 +719,14 @@ const IPLAuctionInterface = ({ roomCode, teams, user, isCreator }) => {
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <p className="text-xs text-white/70">Players</p>
-                        <p className="text-sm font-bold text-white">{team.totalPlayers}/25</p>
+                        <p className={`text-sm font-bold ${team.totalPlayers >= 25 ? 'text-red-400 flex items-center' : 'text-white'}`}>
+                          {team.totalPlayers}/25
+                          {team.totalPlayers >= 25 && (
+                            <span className="ml-1 text-xs bg-red-500/30 text-white px-1.5 rounded-sm">
+                              MAX
+                            </span>
+                          )}
+                        </p>
                       </div>
                       <div>
                         <p className="text-xs text-white/70">Overseas</p>

@@ -152,11 +152,17 @@ class AuctionService {
     if (currentPlayer.overseas && team.overseasCount >= 8) {
       return { success: false, error: 'Overseas player limit reached (8)' };
     }
+    
+    // Check player limit
+    if (team.totalPlayers >= 25) {
+      return { success: false, error: 'Maximum player limit reached (25)' };
+    }
 
     // Update auction state
     auction.currentBid = bidAmount;
     auction.currentBidder = team.name;
     auction.currentBidderTeam = teamId;
+    auction.lastBidTeam = teamId; // Track team that last placed a bid (for turn-based bidding)
     auction.passCount = 0;
     auction.timeRemaining = 30; // Reset timer
 
