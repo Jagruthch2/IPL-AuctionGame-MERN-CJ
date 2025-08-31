@@ -15,6 +15,7 @@ const allowedOrigins = [
   "http://localhost:5173", 
   "http://localhost:5174", 
   "https://dazzling-mochi-d70ba6.netlify.app",
+  "https://tubular-cascaron-da9fc9.netlify.app",
   "https://ipl-auctiongame-mern-cj.onrender.com"
 ];
 
@@ -39,36 +40,33 @@ const PORT = process.env.PORT || 4000;
 
 // Middleware
 app.use(cors({
-  origin: corsOrigin,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (corsOrigin === '*') {
+      return callback(null, true); // Allow any origin
+    }
+    
+    if (allowedOrigins.indexOf(origin) === -1) {
+      // Origin not allowed
+      console.log(`Origin not allowed: ${origin}`);
+      return callback(null, false);
+    }
+    
+    // Origin allowed
+    return callback(null, true);
+  },
   credentials: true,
-  allowedHeaders: ["Content-Type", "Authorization"]
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Origin", "X-Requested-With", "Content-Type", "Accept", "Authorization"]
 }));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Additional CORS headers for preflight requests
-app.use((req, res, next) => {
-  // Check if the origin is in our allowed list
-  const origin = req.headers.origin;
-  if (corsOrigin === '*' || (origin && allowedOrigins.includes(origin))) {
-    res.header('Access-Control-Allow-Origin', origin);
-  } else {
-    // For localhost or other development environments
-    res.header('Access-Control-Allow-Origin', allowedOrigins[0]);
-  }
-  
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  
-  // Handle preflight OPTIONS request
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-  
-  next();
-});
+// Add CORS preflight response for all routes
+app.options('*', cors());
 
 // Socket.IO connection handling
 const connectedPlayers = new Map(); // Store connected players
@@ -581,6 +579,15 @@ app.use('/api', authRoutes);
 // Test route
 app.get('/api/test', (req, res) => {
   res.json({ message: 'Server is running!' });
+});
+
+// CORS test endpoint
+app.get('/api/cors-test', (req, res) => {
+  res.json({
+    message: 'CORS is working properly',
+    origin: req.headers.origin || 'No origin header found',
+    headers: req.headers
+  });
 });
 
 // Error handling middleware
