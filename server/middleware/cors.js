@@ -8,6 +8,7 @@ const handleCORS = (req, res, next) => {
     "http://localhost:5174", 
     "https://dazzling-mochi-d70ba6.netlify.app",
     "https://tubular-cascaron-da9fc9.netlify.app",
+    "https://iplauction-cj.netlify.app",
     "https://ipl-auctiongame-mern-cj.onrender.com"
   ];
   
@@ -26,7 +27,7 @@ const handleCORS = (req, res, next) => {
     // Log unrecognized origins for debugging
     console.log(`Unrecognized origin: ${origin}`);
     // Default to the Netlify URL since that's what's having issues
-    res.setHeader('Access-Control-Allow-Origin', 'https://tubular-cascaron-da9fc9.netlify.app');
+    res.setHeader('Access-Control-Allow-Origin', 'https://iplauction-cj.netlify.app');
   }
   
   // Set other CORS headers

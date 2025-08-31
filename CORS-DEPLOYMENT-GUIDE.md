@@ -4,7 +4,7 @@
 
 Make sure your server on Render has the following environment variables set:
 
-- `CLIENT_URL`: Set this to `https://tubular-cascaron-da9fc9.netlify.app` (your Netlify app URL)
+- `CLIENT_URL`: Set this to `https://iplauction-cj.netlify.app` (your Netlify app URL)
 - `CORS_ALLOW_ALL`: Set to `false` for production environments
 
 ## Client (Netlify) Configuration

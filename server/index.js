@@ -16,6 +16,7 @@ const allowedOrigins = [
   "http://localhost:5174", 
   "https://dazzling-mochi-d70ba6.netlify.app",
   "https://tubular-cascaron-da9fc9.netlify.app",
+  "https://iplauction-cj.netlify.app",
   "https://ipl-auctiongame-mern-cj.onrender.com"
 ];
 
