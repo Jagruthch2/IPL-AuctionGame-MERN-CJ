@@ -224,10 +224,8 @@ const IPLAuctionInterface = ({ roomCode, teams, user, isCreator }) => {
   };
 
   const formatCurrency = (amount) => {
-    if (amount >= 1000) {
-      return `₹${(amount / 10).toFixed(1)}L`;
-    }
-    return `₹${amount}K`;
+    // Display all amounts in lakhs
+    return `₹${(amount / 10).toFixed(1)}L`;
   };
 
   const getPlayerLevelColor = (level) => {

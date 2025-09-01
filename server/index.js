@@ -8,6 +8,9 @@ const authRoutes = require('./routes/auth');
 const auctionService = require('./services/auctionService');
 const tournamentService = require('./services/tournamentService');
 
+// Map to store active timers for each auction room
+const bidTimers = new Map();
+
 const app = express();
 const httpServer = http.createServer(app);
 // Define allowed origins
@@ -286,6 +289,9 @@ io.on('connection', (socket) => {
     room.auctionState = auctionState;
     auctionRooms.set(startData.roomCode, room);
     
+    // Start the bid timer for automatic completion when it reaches zero
+    startBidTimer(startData.roomCode);
+    
     // Notify all players in the room
     io.to(startData.roomCode).emit('auction:started', {
       room,
@@ -316,6 +322,9 @@ io.on('connection', (socket) => {
     if (result.success) {
       // Get updated team stats after the bid
       const teamStats = auctionService.getTeamStats(bidData.roomCode);
+      
+      // Reset the bid timer when a bid is placed
+      resetBidTimer(bidData.roomCode);
       
       // Broadcast bid to all players in room
       io.to(bidData.roomCode).emit('auction:bidPlaced', {
@@ -590,6 +599,71 @@ app.get('/api/cors-test', (req, res) => {
     headers: req.headers
   });
 });
+
+// Function to start or reset the bid timer
+function startBidTimer(roomCode) {
+  // Clear existing timer if any
+  if (bidTimers.has(roomCode)) {
+    clearInterval(bidTimers.get(roomCode).interval);
+  }
+  
+  const room = auctionRooms.get(roomCode);
+  if (!room || !room.auctionState || room.auctionState.paused) {
+    return;
+  }
+
+  let timeRemaining = 30; // 30 seconds timer
+  
+  const interval = setInterval(() => {
+    timeRemaining--;
+    
+    // Update clients with remaining time
+    if (timeRemaining % 5 === 0 || timeRemaining <= 5) {
+      io.to(roomCode).emit('auction:timerUpdate', { timeRemaining });
+    }
+    
+    // When timer reaches zero
+    if (timeRemaining <= 0) {
+      clearInterval(interval);
+      
+      // Get current auction state
+      const room = auctionRooms.get(roomCode);
+      if (room && room.auctionState) {
+        // Complete auction for current player based on highest bidder
+        const result = auctionService.completePlayerAuction(roomCode);
+        
+        if (result) {
+          // Update room with new auction state
+          room.auctionState = result.auctionState;
+          auctionRooms.set(roomCode, room);
+          
+          // Notify all clients
+          io.to(roomCode).emit('auction:playerSold', {
+            auctionState: result.auctionState,
+            teamStats: result.teamStats,
+            playerSold: result.auctionState.currentBidderTeam !== null
+          });
+          
+          // Start timer for next player if auction is still active
+          if (room.auctionState.auctionStatus === 'active') {
+            startBidTimer(roomCode);
+          }
+        }
+      }
+    }
+  }, 1000);
+  
+  // Store timer reference
+  bidTimers.set(roomCode, { interval, timeRemaining });
+}
+
+// Function to reset the timer when a bid is placed
+function resetBidTimer(roomCode) {
+  if (bidTimers.has(roomCode)) {
+    clearInterval(bidTimers.get(roomCode).interval);
+  }
+  startBidTimer(roomCode);
+}
 
 // Error handling middleware
 app.use((err, req, res, next) => {

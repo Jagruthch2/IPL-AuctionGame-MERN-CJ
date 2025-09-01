@@ -10,11 +10,12 @@ class AuctionService {
   generatePlayerPool(numberOfTeams) {
     const poolSize = this.calculatePoolSize(numberOfTeams);
     
-    // Always include all Ultra Legend players
+    // ALWAYS include all Ultra Legend players - these are mandatory
     let playerPool = [...ultraLegendPlayers];
+    console.log(`Including ${ultraLegendPlayers.length} ultra legend players in auction`);
     
-    // Calculate remaining slots
-    const remainingSlots = poolSize - ultraLegendPlayers.length;
+    // Calculate remaining slots after including ultra legend players
+    const remainingSlots = Math.max(0, poolSize - ultraLegendPlayers.length);
     
     // Combine all other players
     const otherPlayers = [
@@ -30,6 +31,10 @@ class AuctionService {
     const selectedOthers = shuffledOthers.slice(0, remainingSlots);
     
     playerPool = [...playerPool, ...selectedOthers];
+    
+    // Log the ultra legend players included in pool
+    const ultraLegendsInPool = playerPool.filter(p => p.level === 'ultra-legend');
+    console.log(`Final pool has ${ultraLegendsInPool.length} ultra legend players out of ${playerPool.length} total players`);
     
     // Add unique IDs and base prices
     return playerPool.map((player, index) => ({
@@ -137,7 +142,8 @@ class AuctionService {
     }
 
     const currentPlayer = auction.currentPlayer;
-    const minBid = auction.currentBid + currentPlayer.bidIncrement;
+    // If no bid has been placed yet, the minimum bid is the base price
+    const minBid = auction.currentBid === 0 ? currentPlayer.basePrice : auction.currentBid + currentPlayer.bidIncrement;
 
     // Validate bid
     if (bidAmount < minBid) {
